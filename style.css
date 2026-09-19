@@ -274,6 +274,8 @@ input, textarea { font-family: inherit; }
 }
 
 /* 正在输入气泡 */
+.typing-bubble { display: inline-flex; align-items: center; }
+.typing-text { font-size: 13px; color: var(--text-color, #4a3b6b); opacity: .72; margin-right: 6px; }
 .typing-dots { display: inline-flex; gap: 4px; align-items: center; height: 18px; }
 .typing-dots i {
   width: 6px; height: 6px;

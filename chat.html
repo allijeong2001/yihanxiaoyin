@@ -193,7 +193,7 @@
     msg.id = 'typingMsg';
     msg.innerHTML =
       '<div class="avatar" style="background:' + c.partnerAvatarColor + '">' + escapeHtml(c.partnerAvatarText) + '</div>' +
-      '<div class="bubble"><span class="typing-dots"><i></i><i></i><i></i></span></div>';
+      '<div class="bubble typing-bubble"><span class="typing-text">' + escapeHtml(c.typingText || (c.partnerName + '正在输入…')) + '</span><span class="typing-dots"><i></i><i></i><i></i></span></div>';
     msgBox.appendChild(msg);
     scrollToBottom();
   }
@@ -239,9 +239,8 @@
     sendBtn.style.opacity = '.6';
 
     var delay = replySeconds() * 1000;
-    setTimeout(function () {
-      addTyping();
-    }, Math.max(0, delay - 700));
+    /* 等待期间全程显示「正在输入」气泡 */
+    addTyping();
 
     setTimeout(function () {
       removeTyping();

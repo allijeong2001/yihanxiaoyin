@@ -49,7 +49,7 @@ const SITE_CONFIG = {
     "userBubbleTextColor": "#ffffff",
     "inputPlaceholder": "和他说点什么吧…",
     "sendButtonText": "发送",
-    "typingText": "对方正在输入…",
+    "typingText": "哥哥正在输入…",
     "replyDelayMs": 1000,
     "keywordRules": [],
     "randomReplies": [

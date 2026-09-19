@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>写信</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="float-deco" id="floatDeco"></div>
+
+<div class="page">
+
+  <header class="topbar">
+    <a class="back-btn" href="index.html" aria-label="返回主页">←</a>
+    <span class="topbar-title" id="pageTitle"></span>
+    <button class="cards-entry" id="cardsBtn">回信字卡库</button>
+  </header>
+
+  <div class="letter-stage">
+
+    <!-- 状态一：信箱（历史信件列表） -->
+    <div id="inboxView" style="display:none;width:100%">
+      <div class="inbox-list" id="inboxList"></div>
+      <button class="letter-btn" id="newLetterBtn"></button>
+    </div>
+
+    <!-- 状态二：写信 -->
+    <div id="writeView" style="display:none;width:100%">
+      <div class="letter-paper">
+        <div class="letter-salutation" id="letterSalutation"></div>
+        <textarea class="letter-textarea" id="letterBody" maxlength="2000"></textarea>
+        <div class="letter-sign" id="letterSign"></div>
+      </div>
+      <button class="letter-btn" id="sendBtn"></button>
+    </div>
+
+    <!-- 状态三：信已寄出，等待回信 -->
+    <div id="sendingView" style="display:none;width:100%">
+      <div class="envelope-wrap">
+        <div class="envelope"></div>
+        <div class="envelope-text" id="sendingText"></div>
+      </div>
+    </div>
+
+    <!-- 状态四：查看一封信（我的信 + 他的回信） -->
+    <div id="detailView" style="display:none;width:100%">
+      <div class="letter-full" id="letterFull"></div>
+      <button class="letter-btn ghost" id="backInboxBtn"></button>
+      <button class="letter-btn" id="againBtn"></button>
+    </div>
+
+  </div>
+</div>
+
+<!-- 回信字卡库弹窗 -->
+<div class="cards-mask hide" id="cardsMask">
+  <div class="cards-panel">
+    <div class="cards-head">
+      <span class="cards-title">哥哥的回信字卡库</span>
+      <button class="cards-close" id="cardsClose">✕</button>
+    </div>
+    <div class="cards-tip">哥哥的回信会从这里随机抽取，可以自由修改、删除或添加～</div>
+    <div class="cards-list" id="cardsList"></div>
+    <button class="cards-add" id="cardsAdd">＋ 添加回信</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  var g = SITE_CONFIG.global;
+  var L = SITE_CONFIG.letter;
+
+  var LETTER_KEY = 'xxy_letters';        // 信件存储
+  var CARD_KEY = 'xxy_letter_cards';     // 回信字卡库存储
+
+  /* 应用全局配色 */
+  var root = document.documentElement;
+  root.style.setProperty('--grad-from', g.gradientFrom);
+  root.style.setProperty('--grad-to', g.gradientTo);
+  root.style.setProperty('--text-color', g.textColor);
+  root.style.setProperty('--letter-paper-color', L.paperColor);
+  root.style.setProperty('--reply-paper-color', L.replyPaperColor);
+  document.title = g.siteTitle + ' · ' + L.pageTitle;
+
+  /* 文案注入 */
+  document.getElementById('pageTitle').textContent = L.pageTitle;
+  document.getElementById('letterSalutation').textContent = L.salutation;
+  document.getElementById('letterSign').textContent = L.signature;
+  document.getElementById('letterBody').placeholder = L.inputPlaceholder;
+  document.getElementById('sendBtn').textContent = L.sendButtonText;
+  document.getElementById('sendingText').textContent = L.sendingText;
+  document.getElementById('newLetterBtn').textContent = '✉️ ' + L.newLetterButton;
+  document.getElementById('backInboxBtn').textContent = L.backInboxButton;
+  document.getElementById('againBtn').textContent = L.newLetterButton;
+
+  /* ---------- 本地存储 ---------- */
+  function loadJSON(key, fallback) {
+    try {
+      var v = JSON.parse(localStorage.getItem(key));
+      if (v !== null && v !== undefined) return v;
+    } catch (e) {}
+    return fallback;
+  }
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  }
+
+  /* 信件：[{ text, t, reply, replyT }]，最新在前 */
+  var letters = loadJSON(LETTER_KEY, []);
+  if (!Array.isArray(letters)) letters = [];
+  letters = letters.filter(function (x) { return x && x.text; });
+  function persistLetters() { saveJSON(LETTER_KEY, letters); }
+
+  /* 回信字卡库：首次进入用 config 初始化，之后以本地为准 */
+  var cards = loadJSON(CARD_KEY, null);
+  if (!Array.isArray(cards)) {
+    cards = (L.replies || []).slice();
+    saveJSON(CARD_KEY, cards);
+  }
+  function persistCards() { saveJSON(CARD_KEY, cards); }
+
+  function pickReply() {
+    var list = cards.filter(function (t) { return t && String(t).trim(); });
+    if (!list.length) return '……';
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  /* ---------- 视图切换 ---------- */
+  var views = {
+    inbox: document.getElementById('inboxView'),
+    write: document.getElementById('writeView'),
+    sending: document.getElementById('sendingView'),
+    detail: document.getElementById('detailView')
+  };
+  function show(name) {
+    Object.keys(views).forEach(function (k) {
+      views[k].style.display = (k === name) ? 'block' : 'none';
+    });
+  }
+
+  /* ---------- 状态一：信箱 ---------- */
+  function fmtDate(t) {
+    var d = new Date(t);
+    function p(n) { return n < 10 ? '0' + n : n; }
+    return d.getFullYear() + '.' + p(d.getMonth() + 1) + '.' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function renderInbox() {
+    var box = document.getElementById('inboxList');
+    box.innerHTML = '';
+
+    if (!letters.length) {
+      var empty = document.createElement('div');
+      empty.className = 'inbox-empty';
+      empty.textContent = L.inboxEmptyText;
+      box.appendChild(empty);
+      return;
+    }
+
+    letters.forEach(function (item, idx) {
+      var el = document.createElement('div');
+      el.className = 'inbox-item';
+
+      var date = document.createElement('div');
+      date.className = 'inbox-date';
+      date.textContent = '✉ ' + fmtDate(item.t);
+
+      var excerpt = document.createElement('div');
+      excerpt.className = 'inbox-excerpt';
+      excerpt.textContent = item.text.replace(/\n/g, ' ');
+
+      var state = document.createElement('span');
+      state.className = 'inbox-state ' + (item.reply ? 'replied' : 'wait');
+      state.textContent = item.reply ? '🦋 已回信' : '⏳ 等待回信';
+
+      el.appendChild(date);
+      el.appendChild(excerpt);
+      el.appendChild(state);
+      el.addEventListener('click', function () {
+        openDetail(idx);
+      });
+      box.appendChild(el);
+    });
+  }
+
+  /* ---------- 状态二：写信 ---------- */
+  var letterBody = document.getElementById('letterBody');
+
+  document.getElementById('newLetterBtn').addEventListener('click', function () {
+    letterBody.value = '';
+    show('write');
+    window.scrollTo({ top: 0 });
+  });
+
+  function shake(el) {
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = 'shakeX .4s ease';
+    setTimeout(function () { el.style.animation = ''; }, 450);
+    var style = document.createElement('style');
+    style.textContent = '@keyframes shakeX{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}50%{transform:translateX(7px)}75%{transform:translateX(-4px)}}';
+    document.head.appendChild(style);
+  }
+
+  /* ---------- 状态三：寄出 + 等待回信 ---------- */
+  var pendingIdx = -1; // 当前等待回信的信件下标
+
+  document.getElementById('sendBtn').addEventListener('click', function () {
+    var text = letterBody.value.trim();
+    if (!text) {
+      shake(document.getElementById('writeView'));
+      return;
+    }
+
+    var item = { text: text, t: Date.now(), reply: '', replyT: 0 };
+    letters.unshift(item);
+    persistLetters();
+    pendingIdx = 0;
+
+    show('sending');
+
+    var delay = Number(L.replyDelayMs) || 3500;
+    var textEl = document.getElementById('sendingText');
+
+    /* 前半段：信已寄出；后半段：哥哥正在回信 */
+    setTimeout(function () {
+      textEl.textContent = L.replyingText;
+      textEl.classList.add('replying');
+    }, Math.max(0, delay - 1500));
+
+    setTimeout(function () {
+      deliverReply();
+    }, delay);
+  });
+
+  /* 回信落袋：写入存储并展示（页面中途离开也能补上） */
+  function deliverReply() {
+    if (pendingIdx < 0 || !letters[pendingIdx]) return;
+    letters[pendingIdx].reply = pickReply();
+    letters[pendingIdx].replyT = Date.now();
+    persistLetters();
+    openDetail(pendingIdx);
+    pendingIdx = -1;
+  }
+
+  /* ---------- 状态四：查看信件详情 ---------- */
+  function openDetail(idx) {
+    var item = letters[idx];
+    if (!item) return;
+    pendingIdx = -1;
+
+    var full = document.getElementById('letterFull');
+    full.innerHTML = '';
+
+    /* 我写的信 */
+    var mine = document.createElement('div');
+    mine.className = 'letter-body-paper';
+    mine.innerHTML =
+      '<div class="letter-label">✉ 我寄出的信 · ' + escapeHtml(fmtDate(item.t)) + '</div>' +
+      '<div class="letter-content">' + escapeHtml(item.text) + '</div>' +
+      '<div class="letter-content right" style="font-size:17px;margin-top:8px;">' + escapeHtml(L.signature) + '</div>';
+    full.appendChild(mine);
+
+    /* 他的回信 */
+    var replyWrap = document.createElement('div');
+    replyWrap.className = 'letter-body-paper reply';
+    if (item.reply) {
+      replyWrap.innerHTML =
+        '<div class="letter-label">🦋 ' + escapeHtml(L.partnerName) + '的回信 · ' + escapeHtml(fmtDate(item.replyT)) + '</div>' +
+        '<div class="letter-content">' + escapeHtml(item.reply) + '</div>';
+    } else {
+      replyWrap.innerHTML =
+        '<div class="letter-label">🦋 ' + escapeHtml(L.partnerName) + '的回信</div>' +
+        '<div class="letter-content" style="color:#a98fd8;">信正在路上，等他提笔回信…</div>';
+    }
+    full.appendChild(replyWrap);
+
+    show('detail');
+    window.scrollTo({ top: 0 });
+  }
+
+  document.getElementById('backInboxBtn').addEventListener('click', function () {
+    renderInbox();
+    show('inbox');
+    window.scrollTo({ top: 0 });
+  });
+
+  document.getElementById('againBtn').addEventListener('click', function () {
+    letterBody.value = '';
+    show('write');
+    window.scrollTo({ top: 0 });
+  });
+
+  /* ---------- 回信字卡库管理（增 / 删 / 改） ---------- */
+  var cardsMask = document.getElementById('cardsMask');
+  var cardsList = document.getElementById('cardsList');
+
+  function openCards() {
+    renderCards();
+    cardsMask.classList.remove('hide');
+  }
+  function closeCards() {
+    collectCards();
+    cardsMask.classList.add('hide');
+  }
+  function collectCards() {
+    var next = [];
+    cardsList.querySelectorAll('.card-row textarea').forEach(function (ta) {
+      var v = ta.value;
+      if (v && v.trim()) next.push(v);
+    });
+    cards = next;
+    persistCards();
+  }
+
+  function renderCards() {
+    cardsList.innerHTML = '';
+    cards.forEach(function (text) {
+      cardsList.appendChild(makeCardRow(text));
+    });
+  }
+
+  function makeCardRow(text) {
+    var row = document.createElement('div');
+    row.className = 'card-row';
+
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.rows = Math.max(3, Math.ceil(String(text).length / 20));
+
+    var del = document.createElement('button');
+    del.className = 'card-del';
+    del.textContent = '✕';
+    del.addEventListener('click', function () {
+      var kept = [];
+      cardsList.querySelectorAll('.card-row').forEach(function (r) {
+        if (r !== row) {
+          var v = r.querySelector('textarea').value;
+          if (v && v.trim()) kept.push(v);
+        }
+      });
+      cards = kept;
+      persistCards();
+      row.style.transition = 'opacity .2s, transform .2s';
+      row.style.opacity = '0';
+      row.style.transform = 'translateX(20px)';
+      setTimeout(function () { row.remove(); }, 200);
+    });
+
+    row.appendChild(ta);
+    row.appendChild(del);
+    return row;
+  }
+
+  document.getElementById('cardsBtn').addEventListener('click', openCards);
+  document.getElementById('cardsClose').addEventListener('click', closeCards);
+  cardsMask.addEventListener('click', function (e) {
+    if (e.target === cardsMask) closeCards();
+  });
+  document.getElementById('cardsAdd').addEventListener('click', function () {
+    var row = makeCardRow('');
+    cardsList.appendChild(row);
+    var ta = row.querySelector('textarea');
+    ta.focus();
+    cardsList.scrollTop = cardsList.scrollHeight;
+  });
+
+  /* ---------- 启动 ---------- */
+  /* 若有信还没等到回信（中途离开了页面），先补上一封回信 */
+  letters.forEach(function (item) {
+    if (item && !item.reply) {
+      item.reply = pickReply();
+      item.replyT = Date.now();
+    }
+  });
+  persistLetters();
+
+  if (letters.length) {
+    renderInbox();
+    show('inbox');
+  } else {
+    show('write');
+  }
+
+  /* 漂浮装饰：蝴蝶 / 音符 / 咖啡 / 鸢尾 */
+  var deco = document.getElementById('floatDeco');
+  var symbols = ['🦋', '🎵', '☕', '🪻', '✨', '💜'];
+  for (var i = 0; i < 12; i++) {
+    var s = document.createElement('span');
+    s.textContent = symbols[i % symbols.length];
+    s.style.left = (Math.random() * 100) + '%';
+    s.style.fontSize = (12 + Math.random() * 16) + 'px';
+    s.style.animationDuration = (10 + Math.random() * 14) + 's';
+    s.style.animationDelay = (-Math.random() * 16) + 's';
+    deco.appendChild(s);
+  }
+
+  function escapeHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+})();
+</script>
+</body>
+</html>

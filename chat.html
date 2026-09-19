@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>聊天</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="chat-app" id="chatApp">
+
+  <!-- 顶部：返回 + 对方昵称 + 字卡库入口 -->
+  <header class="chat-header">
+    <a class="back-btn" href="index.html" aria-label="返回主页">←</a>
+    <span class="chat-title" id="chatTitle"></span>
+    <button class="cards-entry" id="cardsBtn">字卡库</button>
+  </header>
+
+  <!-- 聊天记录（持久保存，切换页面/切出浏览器后依然保留） -->
+  <main class="chat-messages" id="messages"></main>
+
+  <!-- 底部输入栏 -->
+  <footer class="chat-input-bar">
+    <input type="text" id="chatInput" autocomplete="off" maxlength="500">
+    <button id="sendBtn"></button>
+  </footer>
+</div>
+
+<!-- 字卡库弹窗 -->
+<div class="cards-mask hide" id="cardsMask">
+  <div class="cards-panel">
+    <div class="cards-head">
+      <span class="cards-title">哥哥的字卡库</span>
+      <button class="cards-close" id="cardsClose">✕</button>
+    </div>
+    <div class="cards-tip">哥哥会用这些字卡来回复你，可以自由修改、删除或添加～</div>
+    <div class="cards-list" id="cardsList"></div>
+    <button class="cards-add" id="cardsAdd">＋ 添加字卡</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  var g = SITE_CONFIG.global;
+  var c = SITE_CONFIG.chat;
+
+  var MSG_KEY = 'xxy_chat_messages';   // 聊天记录存储
+  var CARD_KEY = 'xxy_chat_cards';     // 字卡库存储
+
+  /* 应用全局配色与气泡颜色 */
+  var root = document.documentElement;
+  root.style.setProperty('--grad-from', g.gradientFrom);
+  root.style.setProperty('--grad-to', g.gradientTo);
+  root.style.setProperty('--text-color', g.textColor);
+  root.style.setProperty('--partner-bubble', c.partnerBubbleColor);
+  root.style.setProperty('--partner-bubble-text', c.partnerBubbleTextColor);
+  root.style.setProperty('--user-bubble', c.userBubbleColor);
+  root.style.setProperty('--user-bubble-text', c.userBubbleTextColor);
+  document.title = g.siteTitle + ' · ' + c.pageTitle;
+
+  /* 顶部与输入栏文案 */
+  document.getElementById('chatTitle').textContent = c.partnerName;
+  var input = document.getElementById('chatInput');
+  input.placeholder = c.inputPlaceholder;
+  document.getElementById('sendBtn').textContent = c.sendButtonText;
+
+  var msgBox = document.getElementById('messages');
+  var sendBtn = document.getElementById('sendBtn');
+  var waiting = false; // 是否正在等待对方回复
+
+  /* ---------- 本地存储 ---------- */
+  function loadJSON(key, fallback) {
+    try {
+      var v = JSON.parse(localStorage.getItem(key));
+      if (v !== null && v !== undefined) return v;
+    } catch (e) {}
+    return fallback;
+  }
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  }
+
+  /* 聊天记录：[{ who: 'user'|'partner', text, t }] */
+  var messages = loadJSON(MSG_KEY, []);
+  function persistMessages() { saveJSON(MSG_KEY, messages); }
+
+  /* 字卡库：首次进入时用 config 里的回复初始化，之后以本地为准 */
+  var cards = loadJSON(CARD_KEY, null);
+  if (!Array.isArray(cards)) {
+    cards = (c.randomReplies || []).slice();
+    saveJSON(CARD_KEY, cards);
+  }
+  function persistCards() { saveJSON(CARD_KEY, cards); }
+
+  /* ---------- 消息渲染 ---------- */
+  function addMessage(who, text, opts) {
+    opts = opts || {};
+    var msg = document.createElement('div');
+    msg.className = 'msg ' + who;
+
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    if (who === 'partner') {
+      avatar.style.background = c.partnerAvatarColor;
+      avatar.textContent = c.partnerAvatarText;
+    } else {
+      avatar.style.background = c.userAvatarColor;
+      avatar.textContent = c.userAvatarText;
+    }
+
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text; // textContent 防注入
+
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    msgBox.appendChild(msg);
+
+    if (!opts.silent) scrollToBottom();
+
+    /* 持久化 */
+    messages.push({ who: who, text: text, t: opts.time || Date.now() });
+    persistMessages();
+    return msg;
+  }
+
+  /* 恢复历史聊天记录 */
+  function restoreMessages() {
+    messages.forEach(function (m) {
+      if (!m || !m.text) return;
+      renderMessage(m.who === 'user' ? 'user' : 'partner', m.text);
+    });
+    if (messages.length) scrollToBottom();
+  }
+  function renderMessage(who, text) {
+    var msg = document.createElement('div');
+    msg.className = 'msg ' + who;
+    var avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    if (who === 'partner') {
+      avatar.style.background = c.partnerAvatarColor;
+      avatar.textContent = c.partnerAvatarText;
+    } else {
+      avatar.style.background = c.userAvatarColor;
+      avatar.textContent = c.userAvatarText;
+    }
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    msg.appendChild(avatar);
+    msg.appendChild(bubble);
+    msgBox.appendChild(msg);
+  }
+
+  function addTyping() {
+    var msg = document.createElement('div');
+    msg.className = 'msg partner';
+    msg.id = 'typingMsg';
+    msg.innerHTML =
+      '<div class="avatar" style="background:' + c.partnerAvatarColor + '">' + escapeHtml(c.partnerAvatarText) + '</div>' +
+      '<div class="bubble"><span class="typing-dots"><i></i><i></i><i></i></span></div>';
+    msgBox.appendChild(msg);
+    scrollToBottom();
+  }
+
+  function removeTyping() {
+    var t = document.getElementById('typingMsg');
+    if (t && t.parentNode) t.parentNode.removeChild(t);
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(function () {
+      msgBox.scrollTop = msgBox.scrollHeight;
+    });
+  }
+
+  /* ---------- 回复抽取逻辑（从字卡库抽取） ---------- */
+  function pickReply(userText) {
+    var lower = String(userText).toLowerCase();
+    // 关键词规则优先：输入包含任一关键词 -> 从对应回复中随机抽取
+    for (var i = 0; i < (c.keywordRules || []).length; i++) {
+      var rule = c.keywordRules[i];
+      var hit = (rule.keywords || []).some(function (kw) {
+        return kw && lower.indexOf(String(kw).toLowerCase()) !== -1;
+      });
+      if (hit && rule.replies && rule.replies.length) {
+        return rule.replies[Math.floor(Math.random() * rule.replies.length)];
+      }
+    }
+    // 未命中关键词 -> 从字卡库（非空字卡）中抽取
+    var list = cards.filter(function (t) { return t && String(t).trim(); });
+    if (!list.length) return '……';
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  /* ---------- 发送 ---------- */
+  function send() {
+    var text = input.value.trim();
+    if (!text || waiting) return;
+    input.value = '';
+    addMessage('user', text);
+    waiting = true;
+    sendBtn.disabled = true;
+    sendBtn.style.opacity = '.6';
+
+    var delay = Number(c.replyDelayMs) || 1000;
+    setTimeout(function () {
+      addTyping();
+    }, Math.max(0, delay - 700));
+
+    setTimeout(function () {
+      removeTyping();
+      addMessage('partner', pickReply(text));
+      waiting = false;
+      sendBtn.disabled = false;
+      sendBtn.style.opacity = '1';
+    }, delay);
+  }
+
+  sendBtn.addEventListener('click', send);
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') send();
+  });
+
+  /* ---------- 字卡库管理（增 / 删 / 改） ---------- */
+  var cardsMask = document.getElementById('cardsMask');
+  var cardsList = document.getElementById('cardsList');
+
+  function openCards() {
+    renderCards();
+    cardsMask.classList.remove('hide');
+  }
+  function closeCards() {
+    collectCards(); // 关闭前先收集一次编辑内容
+    cardsMask.classList.add('hide');
+  }
+  function collectCards() {
+    var rows = cardsList.querySelectorAll('.card-row textarea');
+    var next = [];
+    rows.forEach(function (ta) {
+      var v = ta.value;
+      if (v && v.trim()) next.push(v);
+    });
+    cards = next;
+    persistCards();
+  }
+
+  function renderCards() {
+    cardsList.innerHTML = '';
+    cards.forEach(function (text, idx) {
+      cardsList.appendChild(makeCardRow(text, idx));
+    });
+  }
+
+  function makeCardRow(text) {
+    var row = document.createElement('div');
+    row.className = 'card-row';
+
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.rows = Math.max(1, Math.ceil(String(text).length / 22));
+    ta.addEventListener('input', function () {
+      ta.style.height = 'auto';
+      ta.style.height = Math.max(44, ta.scrollHeight) + 'px';
+    });
+
+    var del = document.createElement('button');
+    del.className = 'card-del';
+    del.textContent = '✕';
+    del.addEventListener('click', function () {
+      /* 先收集其它行，再删除本行 */
+      var kept = [];
+      cardsList.querySelectorAll('.card-row').forEach(function (r) {
+        if (r !== row) {
+          var v = r.querySelector('textarea').value;
+          if (v && v.trim()) kept.push(v);
+        }
+      });
+      cards = kept;
+      persistCards();
+      row.style.transition = 'opacity .2s, transform .2s';
+      row.style.opacity = '0';
+      row.style.transform = 'translateX(20px)';
+      setTimeout(function () { row.remove(); }, 200);
+    });
+
+    row.appendChild(ta);
+    row.appendChild(del);
+    return row;
+  }
+
+  document.getElementById('cardsBtn').addEventListener('click', openCards);
+  document.getElementById('cardsClose').addEventListener('click', closeCards);
+  cardsMask.addEventListener('click', function (e) {
+    if (e.target === cardsMask) closeCards();
+  });
+  document.getElementById('cardsAdd').addEventListener('click', function () {
+    var row = makeCardRow('');
+    cardsList.appendChild(row);
+    var ta = row.querySelector('textarea');
+    ta.focus();
+    cardsList.scrollTop = cardsList.scrollHeight;
+  });
+
+  /* ---------- 启动：恢复聊天记录 ---------- */
+  restoreMessages();
+
+  function escapeHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+})();
+</script>
+</body>
+</html>

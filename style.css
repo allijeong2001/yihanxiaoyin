@@ -617,6 +617,40 @@ input, textarea { font-family: inherit; }
 }
 .cards-add:hover { background: rgba(167, 139, 250, .08); }
 
+/* 批量添加输入区 */
+.cards-batch { margin: 4px 14px 10px; }
+.cards-batch textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  border: 1.5px solid #c9b6ee;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-color, #4a3b6b);
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+}
+.cards-batch textarea:focus { border-color: #a78bfa; box-shadow: 0 0 0 3px rgba(167, 139, 250, .15); }
+.batch-confirm {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #a78bfa, #8b6fd6);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.batch-confirm:active { transform: scale(.98); }
+
 /* 顶栏的字卡库入口按钮 */
 .cards-entry {
   margin-left: auto;

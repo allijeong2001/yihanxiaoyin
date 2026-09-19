@@ -65,6 +65,10 @@
     </div>
     <div class="cards-tip">哥哥的回信会从这里随机抽取，可以自由修改、删除或添加～</div>
     <div class="cards-list" id="cardsList"></div>
+    <div class="cards-batch" id="cardsBatch" style="display:none">
+      <textarea id="batchInput" placeholder="支持批量粘贴：一行一条，自动拆分为多封回信（多行长信请逐条添加）"></textarea>
+      <button class="batch-confirm" id="batchConfirm">批量添加</button>
+    </div>
     <button class="cards-add" id="cardsAdd">＋ 添加回信</button>
   </div>
 </div>
@@ -362,12 +366,24 @@
   cardsMask.addEventListener('click', function (e) {
     if (e.target === cardsMask) closeCards();
   });
+  var batchBox = document.getElementById('cardsBatch');
+  var batchInput = document.getElementById('batchInput');
+
   document.getElementById('cardsAdd').addEventListener('click', function () {
-    var row = makeCardRow('');
-    cardsList.appendChild(row);
-    var ta = row.querySelector('textarea');
-    ta.focus();
-    cardsList.scrollTop = cardsList.scrollHeight;
+    batchBox.style.display = (batchBox.style.display === 'none') ? 'block' : 'none';
+    if (batchBox.style.display === 'block') batchInput.focus();
+  });
+
+  /* 批量添加：一行一条，自动拆分为多封回信 */
+  document.getElementById('batchConfirm').addEventListener('click', function () {
+    var lines = batchInput.value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (lines.length) {
+      lines.forEach(function (t) { cardsList.appendChild(makeCardRow(t)); });
+      collectCards();
+      cardsList.scrollTop = cardsList.scrollHeight;
+    }
+    batchInput.value = '';
+    batchBox.style.display = 'none';
   });
 
   /* ---------- 启动 ---------- */

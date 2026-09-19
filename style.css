@@ -667,6 +667,107 @@ input, textarea { font-family: inherit; }
   transition: transform .15s;
 }
 .cards-entry:active { transform: scale(.92); }
+.chat-header .cards-entry + .cards-entry { margin-left: 8px; }
+
+/* =====================================================
+ * 回复速度设置弹窗
+ * ===================================================== */
+.speed-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(74, 59, 107, .42);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 24px;
+}
+.speed-mask.hide { display: none; }
+.speed-panel {
+  width: 100%;
+  max-width: 330px;
+  background: linear-gradient(165deg, #f9f4ff, #efe6fb);
+  border-radius: 20px;
+  padding: 16px 18px 20px;
+  box-shadow: 0 18px 50px rgba(74, 59, 107, .32);
+}
+.speed-tip {
+  font-size: 12.5px;
+  color: #8a7bb0;
+  line-height: 1.6;
+  padding: 0 2px;
+  margin-top: 4px;
+}
+.speed-value {
+  text-align: center;
+  font-size: 34px;
+  font-weight: 800;
+  color: #6a4fc0;
+  margin: 14px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.speed-unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8a7bb0;
+  margin-left: 4px;
+}
+#speedRange {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e6d8f8, #c9b0ef);
+  outline: none;
+  margin: 16px 0 6px;
+  cursor: pointer;
+}
+#speedRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #a78bfa;
+  box-shadow: 0 3px 8px rgba(139, 111, 214, .35);
+  cursor: pointer;
+  transition: transform .15s;
+}
+#speedRange::-webkit-slider-thumb:active { transform: scale(1.15); }
+#speedRange::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #a78bfa;
+  box-shadow: 0 3px 8px rgba(139, 111, 214, .35);
+  cursor: pointer;
+}
+.speed-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #a99cc7;
+  padding: 0 2px;
+}
+.speed-reset {
+  margin-top: 16px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 12px;
+  background: #ece4f9;
+  color: #6a4fc0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background .2s;
+}
+.speed-reset:hover { background: #e2d5f7; }
+.speed-reset:active { transform: scale(.98); }
 
 /* =====================================================
  * 写信页

@@ -14,6 +14,7 @@
   <header class="chat-header">
     <a class="back-btn" href="index.html" aria-label="返回主页">←</a>
     <span class="chat-title" id="chatTitle"></span>
+    <button class="cards-entry" id="speedBtn">⏱ 速度</button>
     <button class="cards-entry" id="cardsBtn">字卡库</button>
   </header>
 
@@ -44,6 +45,21 @@
   </div>
 </div>
 
+<!-- 回复速度设置弹窗 -->
+<div class="speed-mask hide" id="speedMask">
+  <div class="speed-panel">
+    <div class="cards-head">
+      <span class="cards-title">回复速度</span>
+      <button class="cards-close" id="speedClose">✕</button>
+    </div>
+    <div class="speed-tip">哥哥隔多久回复你，拖动滑杆随心调整（1 ～ 300 秒）</div>
+    <div class="speed-value"><span id="speedNum">1</span><span class="speed-unit">秒后回复</span></div>
+    <input type="range" id="speedRange" min="1" max="300" step="1">
+    <div class="speed-scale"><span>1s</span><span>150s</span><span>300s</span></div>
+    <button class="speed-reset" id="speedReset">恢复默认</button>
+  </div>
+</div>
+
 <script src="config.js"></script>
 <script>
 (function () {
@@ -52,6 +68,19 @@
 
   var MSG_KEY = 'xxy_chat_messages';   // 聊天记录存储
   var CARD_KEY = 'xxy_chat_cards';     // 字卡库存储
+  var SPEED_KEY = 'xxy_chat_reply_seconds'; // 回复速度（秒）存储
+
+  /* 默认回复速度：取自 config（replyDelayMs），换算为秒，限制在 1~300 */
+  var DEFAULT_SECONDS = Math.min(300, Math.max(1, Math.round((Number(c.replyDelayMs) || 1000) / 1000)));
+
+  function replySeconds() {
+    var v = parseInt(localStorage.getItem(SPEED_KEY), 10);
+    if (isNaN(v)) return DEFAULT_SECONDS;
+    return Math.min(300, Math.max(1, v));
+  }
+  function saveReplySeconds(v) {
+    try { localStorage.setItem(SPEED_KEY, String(v)); } catch (e) {}
+  }
 
   /* 应用全局配色与气泡颜色 */
   var root = document.documentElement;
@@ -209,7 +238,7 @@
     sendBtn.disabled = true;
     sendBtn.style.opacity = '.6';
 
-    var delay = Number(c.replyDelayMs) || 1000;
+    var delay = replySeconds() * 1000;
     setTimeout(function () {
       addTyping();
     }, Math.max(0, delay - 700));
@@ -318,6 +347,39 @@
     }
     batchInput.value = '';
     batchBox.style.display = 'none';
+  });
+
+  /* ---------- 回复速度设置 ---------- */
+  var speedMask = document.getElementById('speedMask');
+  var speedRange = document.getElementById('speedRange');
+  var speedNum = document.getElementById('speedNum');
+
+  function updateSpeedUI() {
+    var v = replySeconds();
+    speedNum.textContent = v;
+    speedRange.value = v;
+  }
+  function setSpeed(v) {
+    v = Math.min(300, Math.max(1, Math.round(Number(v) || DEFAULT_SECONDS)));
+    saveReplySeconds(v);
+    updateSpeedUI();
+  }
+
+  document.getElementById('speedBtn').addEventListener('click', function () {
+    updateSpeedUI();
+    speedMask.classList.remove('hide');
+  });
+  document.getElementById('speedClose').addEventListener('click', function () {
+    speedMask.classList.add('hide');
+  });
+  speedMask.addEventListener('click', function (e) {
+    if (e.target === speedMask) speedMask.classList.add('hide');
+  });
+  speedRange.addEventListener('input', function () {
+    setSpeed(speedRange.value);
+  });
+  document.getElementById('speedReset').addEventListener('click', function () {
+    setSpeed(DEFAULT_SECONDS);
   });
 
   /* ---------- 启动：恢复聊天记录 ---------- */
